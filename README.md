@@ -50,6 +50,12 @@ CLAUDE_CODE_OAUTH_TOKEN=your-oauth-token-here
 python autonomous_agent_demo.py --project-dir ./my_project
 ```
 
+To start a new project from a **versioned spec file**:
+
+```bash
+python autonomous_agent_demo.py --project-dir ./my_project --spec ./specs/my_project.txt
+```
+
 For testing with limited iterations:
 ```bash
 python autonomous_agent_demo.py --project-dir ./my_project --max-iterations 3
@@ -81,6 +87,48 @@ python autonomous_agent_demo.py --project-dir ./my_project --max-iterations 3
 - Progress is persisted via `feature_list.json` and git commits
 - The agent auto-continues between sessions (3 second delay)
 - Press `Ctrl+C` to pause; run the same command to resume
+
+## Using This Repo As a Long-Lived Template
+
+If you want to use this beyond a demo, the recommended workflow is:
+
+- **Keep this repo** as your stable “agent harness template”.
+  - Commit improvements to prompts, security rules, and scripts here over time.
+  - Keep secrets in `.env` (already gitignored).
+- **Create a new MVP** by creating a new project directory (the generated code) + a new spec.
+  - The generated project lives under `generations/<project>` by default (already gitignored in this harness repo).
+  - The initializer agent is designed to initialize git *inside the generated project*, so each MVP can be its own repo you can push to GitHub.
+
+### Recommended “saved forever” layout
+
+- **Harness repo (this repo)**: versioned and updated over time
+  - Your reusable prompts live in `prompts/`
+  - Your per-MVP specs live in `specs/` (committed)
+- **Each generated MVP**: separate git repo (push it somewhere)
+  - Lives in `generations/<name>` (or use an absolute `--project-dir` outside this repo)
+
+### Fast way to start a new MVP
+
+- **Option A (manual)**:
+
+```bash
+cp prompts/app_spec.txt specs/my_mvp.txt
+python autonomous_agent_demo.py --project-dir my_mvp --spec specs/my_mvp.txt
+```
+
+- **Option B (PowerShell)**:
+
+```bash
+./scripts/new_mvp.ps1 -Name "my_mvp"
+```
+
+### Do you need to “copy the whole repo” each time?
+
+Usually **no**:
+- Keep one harness repo and run new MVPs into new project dirs.
+- Only “copy the repo” if you want to fork the harness into a fundamentally different template.
+
+If you host on GitHub, you can also mark the harness repo as a **Template repository** and click “Use this template” for a fresh copy when you *do* want to fork it.
 
 ## Security Model
 

@@ -7,6 +7,7 @@ Functions for loading prompt templates from the prompts directory.
 
 import shutil
 from pathlib import Path
+from typing import Optional
 
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -28,10 +29,12 @@ def get_coding_prompt() -> str:
     return load_prompt("coding_prompt")
 
 
-def copy_spec_to_project(project_dir: Path) -> None:
-    """Copy the app spec file into the project directory for the agent to read."""
-    spec_source = PROMPTS_DIR / "app_spec.txt"
+def copy_spec_to_project(project_dir: Path, spec_path: Optional[Path] = None) -> None:
+    """Copy an app spec file into the project directory for the agent to read."""
+    spec_source = spec_path if spec_path is not None else (PROMPTS_DIR / "app_spec.txt")
     spec_dest = project_dir / "app_spec.txt"
     if not spec_dest.exists():
+        if not spec_source.exists():
+            raise FileNotFoundError(f"Spec file not found: {spec_source}")
         shutil.copy(spec_source, spec_dest)
         print("Copied app_spec.txt to project directory")

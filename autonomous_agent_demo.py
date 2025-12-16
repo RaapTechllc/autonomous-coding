@@ -41,6 +41,9 @@ Examples:
   # Start fresh project
   python autonomous_agent_demo.py --project-dir ./claude_clone
 
+  # Start fresh project with a custom spec
+  python autonomous_agent_demo.py --project-dir ./claude_clone --spec ./specs/my_mvp_spec.txt
+
   # Use a specific model
   python autonomous_agent_demo.py --project-dir ./claude_clone --model claude-sonnet-4-5-20250929
 
@@ -60,6 +63,13 @@ Environment Variables:
         type=Path,
         default=Path("./autonomous_demo_project"),
         help="Directory for the project (default: generations/autonomous_demo_project). Relative paths automatically placed in generations/ directory.",
+    )
+
+    parser.add_argument(
+        "--spec",
+        type=Path,
+        default=None,
+        help="Path to an app_spec.txt to copy into the project on first run (default: prompts/app_spec.txt).",
     )
 
     parser.add_argument(
@@ -110,6 +120,7 @@ def main() -> None:
                 project_dir=project_dir,
                 model=args.model,
                 max_iterations=args.max_iterations,
+                spec_path=args.spec,
             )
         )
     except KeyboardInterrupt:

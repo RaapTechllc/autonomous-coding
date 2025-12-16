@@ -98,6 +98,7 @@ async def run_autonomous_agent(
     project_dir: Path,
     model: str,
     max_iterations: Optional[int] = None,
+    spec_path: Optional[Path] = None,
 ) -> None:
     """
     Run the autonomous agent loop.
@@ -135,7 +136,7 @@ async def run_autonomous_agent(
         print("=" * 70)
         print()
         # Copy the app spec into the project directory for the agent to read
-        copy_spec_to_project(project_dir)
+        copy_spec_to_project(project_dir, spec_path=spec_path)
     else:
         print("Continuing existing project")
         print_progress_summary(project_dir)
