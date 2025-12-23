@@ -4,19 +4,20 @@ A minimal harness demonstrating long-running autonomous coding with the Claude A
 
 ## Prerequisites
 
-**Required:** Install the latest versions of both Claude Code and the Claude Agent SDK:
+**Required:** Install Claude Code (CLI) and the Claude Agent SDK (Python).
 
 ```bash
-# Install Claude Code CLI (latest version required)
-npm install -g @anthropic-ai/claude-code
+# Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code@latest
 
 # Install Python dependencies
 pip install -r requirements.txt
 ```
 
-Verify your installations:
+Update and verify Claude Code:
 ```bash
-claude --version  # Should be latest version
+claude update     # Installs the latest CLI (safe to run anytime)
+claude --version  # Verify the installed version
 pip show claude-code-sdk  # Check SDK is installed
 ```
 
@@ -26,6 +27,12 @@ Copy the example environment file and add your credentials:
 
 ```bash
 cp .env.example .env
+```
+
+On Windows PowerShell:
+
+```bash
+Copy-Item .env.example .env
 ```
 
 Edit `.env` and configure at least one authentication method:

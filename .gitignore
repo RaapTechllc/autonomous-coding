@@ -8,3 +8,6 @@ venv/
 .env
 __pycache__/
 *.pyc
+
+# IDE config
+.cursor/

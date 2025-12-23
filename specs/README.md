@@ -11,5 +11,3 @@ python autonomous_agent_demo.py --project-dir invoice_mvp --spec specs/invoice_m
 
 On first run, the harness copies your spec into the generated project as `app_spec.txt`.
 After that, editing the spec in `specs/` won’t change an in-progress MVP unless you update the generated project’s `app_spec.txt` too.
-
-

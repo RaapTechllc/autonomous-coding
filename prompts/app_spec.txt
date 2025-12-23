@@ -2,13 +2,16 @@
   <project_name>SMW Commission Agent - Commission Dashboard</project_name>
 
   <overview>
-    Build a commission tracking dashboard for SMW that turns CRM revenue data into clear, auditable commission payouts.
-    The app should sync deals from Salesforce (and/or CSV import), calculate commissions from plan rules, generate period
-    statements, and support review + approvals before payout. It should also include an “AI Commission Agent” that can
-    explain any payout line item using the underlying data and rules (no guessing).
+    Build a commission tracking dashboard for SMW (Sheet Metal Works) that turns CRM revenue data and fabrication project
+    data into clear, auditable commission payouts. The app syncs deals from Salesforce (and/or CSV/Excel import), tracks
+    fabrication projects with jobs, calculates commissions from plan rules (both deal-based and project-based), generates
+    period statements, and supports review + approvals before payout. It includes an Executive/CFO dashboard for project
+    tracking, PO management, margin analysis, and AR verification. An "AI Commission Agent" (post-MVP) can explain any
+    payout line item using the underlying data and rules (no guessing).
 
-    MVP focuses on: Salesforce/CSV ingest, a rules-based calculator, statements, and a clean rep-facing dashboard.
-    Post-MVP adds: richer rule engine, workflows, disputes, forecasting, and payroll integrations.
+    MVP focuses on: CSV/Excel ingest, project tracking system, rules-based calculator (deal + project commissions),
+    statements, rep-facing dashboard, and executive dashboard. Commission profiles allow standardized plan assignment.
+    Post-MVP adds: AI agent, richer rule engine, workflows, disputes, forecasting, and payroll integrations.
   </overview>
 
   <technology_stack>
@@ -27,7 +30,7 @@
       <database>SQLite with better-sqlite3 (MVP), Postgres-ready schema (post-MVP)</database>
       <auth>Session or JWT auth with RBAC</auth>
       <jobs>node-cron (MVP), queue-backed jobs (post-MVP)</jobs>
-      <integrations>Salesforce REST sync + CSV import</integrations>
+      <integrations>Salesforce REST sync + CSV/Excel import</integrations>
       <streaming>SSE for sync progress + long-running calc progress</streaming>
     </backend>
 
@@ -61,9 +64,11 @@
     <mvp_scope>
       <data_ingest>
         - Connect to Salesforce and pull Opportunities + key fields (amount, stage, close date, owner, account, products if available)
-        - Manual CSV import as fallback (same canonical schema)
+        - Manual CSV import (same canonical schema)
+        - Excel (.xlsx) import for projects, jobs, and actuals
         - Field mapping UI (simple mapping wizard)
         - Sync run log with status, counts, and errors
+        - Support for importing: opportunities, projects, project jobs, actual hours, financials
       </data_ingest>
 
       <commission_plans>
@@ -71,14 +76,22 @@
         - Basic rule types:
           - Flat percent of commissionable amount
           - Tiered percent by amount thresholds
+          - Profit percent (for profit-based commissions, excludes freight)
+          - Tiered profit percent
+          - Milestone percent (for project milestone-based commissions)
           - Split support (percent splits across reps)
         - Plan assignment by rep (user)
+        - Commission profiles: Standardized plan templates (e.g., "Fabrication Seller 1.0% Revenue", "Fabrication Profit Owner 5% Profit")
+        - Default profile assignment: Users can have default seller and profit owner profiles assigned during creation
       </commission_plans>
 
       <commission_calculation>
         - Deterministic calculator that produces:
-          - Per-deal commission line items
+          - Per-deal commission line items (opportunity-based)
+          - Per-project commission line items (project-based: seller milestones, profit owner at job close)
           - Per-period statement totals
+        - Supports both opportunity-level and project-level commissions
+        - Project commissions: Seller gets % of project sell price at milestones; Profit owner gets % of true profit (excluding freight) at project close
         - Recalculate on demand (idempotent; snapshots saved)
         - Audit trail for every calculation run
       </commission_calculation>
@@ -91,13 +104,41 @@
 
       <rep_dashboard>
         - YTD commissions, current period estimate, last payout
-        - Deal list with “commission status” (pending, eligible, calculated)
+        - Deal list with "commission status" (pending, eligible, calculated)
         - Filters by period, stage, rep
       </rep_dashboard>
 
+      <project_tracking>
+        - Fabrication project tracker with project numbers
+        - Project-level fields: PO number, PO total, quote details, PM contact, site address
+        - Job tracking: 5-digit job numbers, quoted vs actual hours/pounds, sell prices
+        - PO tracking: Total contract, billed contract, billed extra, PO remaining calculations
+        - Quote tracking: Quote number, quote price, quoted pounds/hours, material/labor costs, markup %, expected profit %
+        - Margin analysis: Hours margin (quoted vs actual), contract margin, extra margin
+        - Invoice tracking: Invoice numbers, invoice totals, pre-tax prices, AR verification status
+        - Job status: Section categorization (EXTRA, HOLD, standard), job dates, fab dates
+        - Financial tracking: Actual revenue, costs (materials, labor, subs, freight, other), actual profit
+        - Project participants: Assign sellers (revenue credit) and profit owners (profit credit) with credit percentages
+        - Project milestones: Track milestone achievements with payout percentages for seller commissions
+      </project_tracking>
+
+      <executive_dashboard>
+        - CFO/Management dashboard with aggregated project metrics
+        - KPI cards: Total projects, active projects, total revenue, total profit, average margin
+        - Project status breakdown (active, closed, cancelled)
+        - Top projects by revenue
+        - PO tracking summary across all projects
+        - Margin trends and analysis
+        - Outstanding invoices (AR not verified)
+        - Projects with negative PO remaining (over-billed)
+        - Projects on hold status
+        - Charts: Status distribution, top projects by revenue
+      </executive_dashboard>
+
       <admin_basics>
-        - User management (rep/admin roles)
+        - User management (rep/manager/finance/admin roles)
         - Global settings: currency, pay period cadence, rounding rules
+        - Default commission profile assignment during user creation (seller profile, profit owner profile)
       </admin_basics>
     </mvp_scope>
 
@@ -224,7 +265,7 @@
 
       <commission_rules>
         - id, plan_version_id
-        - rule_type (flat_percent/tiered_percent)
+        - rule_type (flat_percent/tiered_percent/profit_percent/tiered_profit_percent/milestone_percent)
         - config (JSON)
         - priority
       </commission_rules>
@@ -247,13 +288,15 @@
       <commission_line_items>
         - id
         - calculation_run_id
-        - opportunity_id
+        - opportunity_id (nullable, for deal-based commissions)
+        - project_id (nullable, for project-based commissions)
         - user_id
         - plan_version_id
         - rule_applied_summary
         - commission_amount
         - details (JSON snapshot of inputs + applied tiers)
         - created_at
+        - CHECK constraint: either opportunity_id OR project_id must be present (not both)
       </commission_line_items>
 
       <statements>
@@ -302,6 +345,55 @@
         - reason
         - created_at, updated_at
       </disputes>
+
+      <projects>
+        - id, project_number (unique), customer, status (active/closed/cancelled)
+        - award_date, project_sell_price_total
+        - po_number, po_total
+        - quote_number, quote_price, quote_pounds, quote_material_cost, quote_labor_cost
+        - quote_markup_percent, expected_profit_percent, expected_profit
+        - labor_rate, pm_contact, updated_thru
+        - created_at, updated_at
+      </projects>
+
+      <project_jobs>
+        - id, project_id (FK), job_number (5-digit), section (EXTRA/HOLD/blank)
+        - job_date, fab_date, po_number, job_status
+        - sell_price, pre_tax_price, quoted_pounds, pounds (actual)
+        - quoted_hours, actual_hours
+        - material_cost, labor_cost, machine_rate
+        - invoice_number, invoice_total, ar_verified (YES/blank)
+        - created_at, updated_at
+        - UNIQUE(project_id, job_number)
+      </project_jobs>
+
+      <project_financials>
+        - id, project_id (unique FK)
+        - actual_revenue, cost_materials, cost_labor, cost_subs, cost_freight, cost_other
+        - shop_rate_per_hour, material_cost_per_lb
+        - project_close_date
+        - created_at, updated_at
+      </project_financials>
+
+      <project_participants>
+        - id, project_id (FK), user_id (FK)
+        - component (revenue/profit), role (seller/profit_owner)
+        - credit_percent (0-100)
+        - created_at, updated_at
+      </project_participants>
+
+      <project_milestones>
+        - id, project_id (FK), milestone_type, date_achieved
+        - payout_percent (0-100)
+        - created_at, updated_at
+      </project_milestones>
+
+      <opportunity_participants>
+        - id, opportunity_id (FK), user_id (FK)
+        - component (revenue/profit), role (seller/profit_owner)
+        - credit_percent (0-100)
+        - created_at, updated_at
+      </opportunity_participants>
     </tables>
   </database_schema>
 
@@ -333,6 +425,7 @@
     <sync>
       - POST /api/sync/salesforce/run
       - POST /api/sync/csv/import
+      - POST /api/sync/xlsx/import (Excel import)
       - GET /api/sync/runs
       - GET /api/sync/runs/:id
       - GET /api/sync/stream (SSE)
@@ -387,6 +480,32 @@
       - GET /api/audit?entity_type=&entity_id=
     </audit>
 
+    <projects>
+      - GET /api/projects (list with filters: search, status, pagination)
+      - GET /api/projects/:id (detail with jobs, participants, milestones, financials)
+      - POST /api/projects
+      - PUT /api/projects/:id
+      - DELETE /api/projects/:id
+      - GET /api/projects/:id/jobs
+      - POST /api/projects/:id/jobs
+      - PUT /api/projects/:id/jobs/:jobId
+      - DELETE /api/projects/:id/jobs/:jobId
+      - GET /api/projects/:id/participants
+      - POST /api/projects/:id/participants
+      - DELETE /api/projects/:id/participants/:participantId
+      - GET /api/projects/:id/milestones
+      - POST /api/projects/:id/milestones
+      - PUT /api/projects/:id/milestones/:milestoneId
+      - DELETE /api/projects/:id/milestones/:milestoneId
+      - GET /api/projects/:id/financials
+      - PUT /api/projects/:id/financials
+    </projects>
+
+    <dashboard>
+      - GET /api/dashboard (rep dashboard stats)
+      - GET /api/dashboard/projects (executive dashboard stats)
+    </dashboard>
+
     <ai_agent>
       - POST /api/agent/ask
       - POST /api/agent/draft-dispute
@@ -402,8 +521,10 @@
     </main_structure>
 
     <sidebar_left>
-      - Dashboard
+      - Dashboard (rep view)
+      - Executive (admin/finance/manager - CFO dashboard)
       - Deals
+      - Projects (fabrication project tracker)
       - Statements
       - Plans (admin)
       - Sync (admin)
@@ -438,8 +559,29 @@
       <sync>
         - Connect status
         - Run sync button
+        - CSV and Excel import options
         - Sync run log + progress
       </sync>
+
+      <projects>
+        - Project list with filters (search, status, pagination)
+        - Project detail page with tabs:
+          - Overview: Project info, financial summary, PO tracking, quote details
+          - Jobs: Table of all jobs with quoted vs actual hours/pounds, margins, invoices, AR status
+          - Participants: Sellers and profit owners with credit percentages
+          - Milestones: Milestone tracking with payout percentages
+        - Add/Edit project modal
+        - Add/Edit job modal
+        - Financials editor
+      </projects>
+
+      <executive_dashboard>
+        - KPI cards: Total projects, active projects, total revenue, total profit, average margin
+        - Status breakdown chart (pie chart)
+        - Top projects by revenue (bar chart)
+        - Alerts: Over-billed projects, projects on hold, outstanding invoices
+        - Quick links to project details
+      </executive_dashboard>
     </main_views>
   </ui_layout>
 
@@ -522,10 +664,12 @@
     </step>
 
     <step number="3">
-      <title>Ingest: CSV First, Salesforce Next</title>
+      <title>Ingest: CSV and Excel, Salesforce Next</title>
       <tasks>
         - Build CSV import endpoint + mapping UI
+        - Build Excel (.xlsx) import endpoint for projects, jobs, and actuals
         - Normalize into opportunities table
+        - Support importing projects, project jobs, actual hours, financials
         - Add sync_runs log and error reporting
         - Add Salesforce connect + pull as post-MVP toggle if needed
       </tasks>
@@ -560,6 +704,32 @@
       </tasks>
     </step>
 
+    <step number="6.5">
+      <title>Project Tracking System</title>
+      <tasks>
+        - Create projects, project_jobs, project_financials, project_participants, project_milestones tables
+        - Build project CRUD API endpoints
+        - Build project detail page with tabs (Overview, Jobs, Participants, Milestones, Financials)
+        - Add PO tracking calculations (total contract, billed contract, billed extra, PO remaining)
+        - Add quote details tracking
+        - Add margin calculations (hours margin, contract margin, extra margin)
+        - Add invoice tracking with AR verification
+        - Integrate project-level commissions into calculation engine
+        - Add Excel import for projects and jobs
+      </tasks>
+    </step>
+
+    <step number="6.6">
+      <title>Executive Dashboard and Commission Profiles</title>
+      <tasks>
+        - Build executive/CFO dashboard with aggregated project metrics
+        - Add KPI cards and charts (status breakdown, top projects)
+        - Add commission profile system (standardized plan templates)
+        - Add default profile assignment to user creation
+        - Add seed data for common commission profiles
+      </tasks>
+    </step>
+
     <step number="7">
       <title>Post-MVP Workflows, Disputes, Adjustments</title>
       <tasks>
@@ -591,24 +761,77 @@
 
   <success_criteria>
     <functionality>
-      - Import/sync creates clean opportunity records
-      - Calculator produces repeatable results from the same inputs
+      - Import/sync creates clean opportunity records (CSV and Excel)
+      - Project tracking accurately captures PO, quote, job, and invoice data
+      - PO remaining calculations are correct (total contract - total billed)
+      - Margin calculations (hours, contract, extra) match spreadsheet logic
+      - Calculator produces repeatable results from the same inputs (both opportunity and project-based)
+      - Project-level commissions calculate correctly (seller milestones, profit owner at close)
       - Statements match saved calculation snapshots
       - Exports are correct and usable for payout processing
       - Audit trail shows who changed what and when
+      - AR verification status properly gates commission payouts
     </functionality>
 
     <user_experience>
-      - Reps can understand “what I’m getting paid and why” in under 60 seconds
+      - Reps can understand "what I'm getting paid and why" in under 60 seconds
       - Admin can update plans without breaking past statements
       - Sync and calc progress is transparent and fast
+      - CFO/Management can view executive dashboard with aggregated project metrics
+      - Project detail page provides comprehensive view matching spreadsheet functionality
+      - Excel import reduces manual data entry for projects and jobs
     </user_experience>
 
     <technical_quality>
       - Calculator is unit-tested with fixtures
       - Schema supports plan versioning and immutability of past payouts
+      - Schema supports both opportunity-based and project-based commissions
+      - Database migrations handle schema evolution (ensureColumns for backward compatibility)
       - Secure secret handling and token encryption (when used)
       - Clear error handling and logs for ingest + calculations
+      - Excel import handles multiple sheet types (projects, jobs, actuals)
     </technical_quality>
   </success_criteria>
+
+  <implementation_status>
+    <completed>
+      - Foundation and data model (SQLite with sql.js, RBAC auth)
+      - Frontend shell and navigation (React Router, Layout component)
+      - CSV and Excel import (opportunities, projects, jobs, actuals)
+      - Commission plan builder (flat_percent, tiered_percent, profit_percent, tiered_profit_percent, milestone_percent)
+      - Commission calculator (opportunity-based and project-based)
+      - Statements generation and export
+      - Rep dashboard
+      - Project tracking system (full CRUD, PO tracking, quote details, margins, invoices, AR)
+      - Executive/CFO dashboard
+      - Commission profiles with default assignment
+      - User management with role-based access (rep/manager/finance/admin)
+      - Settings management
+      - Audit logging
+      - Deal detail page with participants and job financials
+    </completed>
+
+    <in_progress>
+      - Advanced margin calculations and reporting
+      - Enhanced project dashboard matching spreadsheet layout
+    </in_progress>
+
+    <not_started>
+      - AI Commission Agent (post-MVP)
+      - Salesforce integration (structure exists, not fully implemented)
+      - Workflows (rep review, manager approval, finance finalize)
+      - Disputes system (schema exists, UI not implemented)
+      - Adjustments approval workflows
+      - Advanced plan features (product/category rates, region multipliers, quota accelerators)
+      - Forecasting and analytics
+      - Payroll export formats
+      - Scheduled sync jobs
+    </not_started>
+
+    <test_coverage>
+      - feature_list.json contains 262 test cases (exceeds initial 200 target)
+      - Tests cover: security, authentication, CRUD operations, calculations, imports, dashboards
+      - Both functional and style tests included
+    </test_coverage>
+  </implementation_status>
 </project_specification>

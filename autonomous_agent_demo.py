@@ -95,11 +95,22 @@ def main() -> None:
 
     # Check for API key
     if not os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
-        print("Error: ANTHROPIC_API_KEY environment variable not set")
-        print("Error: CLAUDE_CODE_OAUTH_TOKEN environment variable not set")
-        print("\nGet your API key from: https://console.anthropic.com/")
-        print("\nThen set it:")
-        print("  export ANTHROPIC_API_KEY='your-api-key-here'")
+        print("Error: No auth configured.")
+        print("  - ANTHROPIC_API_KEY is not set")
+        print("  - CLAUDE_CODE_OAUTH_TOKEN is not set")
+        print("\nConfigure one of the following:")
+        print("  - API key: https://console.anthropic.com/")
+        print("  - OAuth token (Claude Code): run `claude setup-token`")
+        print("\nThen set it (examples):")
+        if os.name == "nt":
+            # PowerShell
+            print('  $env:ANTHROPIC_API_KEY="your-api-key-here"')
+            print('  # OR')
+            print('  $env:CLAUDE_CODE_OAUTH_TOKEN="your-oauth-token-here"')
+        else:
+            print("  export ANTHROPIC_API_KEY='your-api-key-here'")
+            print("  # OR")
+            print("  export CLAUDE_CODE_OAUTH_TOKEN='your-oauth-token-here'")
         return
 
     # Automatically place projects in generations/ directory unless already specified

@@ -80,34 +80,37 @@ It's ok if you only complete one feature in this session, as there will be more 
 Implement the chosen feature thoroughly:
 
 1. Write the code (frontend and/or backend as needed)
-2. Test manually using browser automation (see Step 6)
+2. Test using API calls with curl (see Step 6)
 3. Fix any issues discovered
 4. Verify the feature works end-to-end
 
-### STEP 6: VERIFY WITH BROWSER AUTOMATION
+### STEP 6: VERIFY WITH API TESTING
 
-**CRITICAL:** You MUST verify features through the actual UI.
+**CRITICAL:** You MUST verify features through API testing since browser automation is disabled.
 
-Use browser automation tools:
+Use curl commands to test:
 
-- Navigate to the app in a real browser
-- Interact like a human user (click, type, scroll)
-- Take screenshots at each step
-- Verify both functionality AND visual appearance
+- Test all API endpoints directly with curl
+- Verify request/response payloads match expected format
+- Test authentication and authorization (401/403 responses)
+- Verify database changes persist (create, read, update, delete)
+- Test error handling (invalid inputs, missing data, etc.)
 
 **DO:**
 
-- Test through the UI with clicks and keyboard input
-- Take screenshots to verify visual appearance
-- Check for console errors in browser
-- Verify complete user workflows end-to-end
+- Test backend APIs thoroughly with curl
+- Verify database operations (create, read, update, delete)
+- Test authentication flows (login, token validation)
+- Verify authorization (role-based access)
+- Test error cases and edge cases
+- Check API response formats and status codes
 
 **DON'T:**
 
-- Only test with curl commands (backend testing alone is insufficient)
-- Use JavaScript evaluation to bypass UI (no shortcuts)
-- Skip visual verification
-- Mark tests passing without thorough verification
+- Try to use browser automation tools (they are disabled)
+- Install Playwright or browser testing libraries
+- Skip API testing - this is your primary verification method
+- Mark tests passing without thorough API verification
 
 ### STEP 6.5: MANDATORY VERIFICATION CHECKLIST (BEFORE MARKING ANY TEST PASSING)
 
@@ -120,12 +123,12 @@ Use browser automation tools:
 - [ ] Cannot access other users' data by manipulating URLs
 
 #### Real Data Verification (CRITICAL - NO MOCK DATA)
-- [ ] Created unique test data via UI (e.g., "TEST_12345_VERIFY_ME")
-- [ ] Verified the EXACT data I created appears in UI
-- [ ] Refreshed page - data persists (proves database storage)
-- [ ] Deleted the test data - verified it's gone everywhere
-- [ ] NO unexplained data appeared (would indicate mock data)
-- [ ] Dashboard/counts reflect real numbers after my changes
+- [ ] Created unique test data via API (e.g., "TEST_12345_VERIFY_ME")
+- [ ] Verified the EXACT data I created via GET API call
+- [ ] Called API again - data persists (proves database storage)
+- [ ] Deleted the test data via API - verified it's gone via GET
+- [ ] NO unexplained data in API responses (would indicate mock data)
+- [ ] API counts/statistics reflect real numbers after my changes
 
 #### Navigation Verification
 - [ ] All buttons on this page link to existing routes
@@ -134,11 +137,11 @@ Use browser automation tools:
 - [ ] Related links (edit, view, delete) have correct IDs in URLs
 
 #### Integration Verification
-- [ ] Console shows ZERO JavaScript errors
-- [ ] Network tab shows successful API calls (no 500s)
-- [ ] Data returned from API matches what UI displays
-- [ ] Loading states appeared during API calls
-- [ ] Error states handle failures gracefully
+- [ ] API endpoints return correct status codes (200, 201, 400, 401, 403, 404, 500)
+- [ ] API responses match expected JSON schema
+- [ ] Database operations persist correctly (create, read, update, delete)
+- [ ] Error responses have proper error messages
+- [ ] Authentication tokens work correctly
 
 ### STEP 6.6: MOCK DATA DETECTION SWEEP
 
@@ -156,11 +159,11 @@ grep -r "hardcoded\|placeholder" --include="*.js" --include="*.ts" --include="*.
 **If ANY matches found related to your feature - FIX THEM before proceeding.**
 
 #### 2. Runtime Verification
-For ANY data displayed in UI:
-1. Create NEW data with UNIQUE content (e.g., "TEST_12345_DELETE_ME")
-2. Verify that EXACT content appears in the UI
-3. Delete the record
-4. Verify it's GONE from the UI
+For ANY data returned by API:
+1. Create NEW data with UNIQUE content via POST API (e.g., "TEST_12345_DELETE_ME")
+2. Verify that EXACT content appears in GET API response
+3. Delete the record via DELETE API
+4. Verify it's GONE from GET API response
 5. **If you see data that wasn't created during testing - IT'S MOCK DATA. Fix it.**
 
 #### 3. Database Verification
@@ -199,7 +202,7 @@ to:
 - Combine or consolidate tests
 - Reorder tests
 
-**ONLY CHANGE "passes" FIELD AFTER VERIFICATION WITH SCREENSHOTS.**
+**ONLY CHANGE "passes" FIELD AFTER VERIFICATION WITH API TESTING.**
 
 ### STEP 8: COMMIT YOUR PROGRESS
 
@@ -210,9 +213,9 @@ git add .
 git commit -m "Implement [feature name] - verified end-to-end
 
 - Added [specific changes]
-- Tested with browser automation
+- Tested with API calls (curl)
 - Updated feature_list.json: marked test #X as passing
-- Screenshots in verification/ directory
+- Verified database operations and API responses
 "
 ```
 
@@ -240,31 +243,43 @@ Before context fills up:
 
 ## TESTING REQUIREMENTS
 
-**ALL testing must use browser automation tools.**
+**ALL testing must use API testing with curl commands.**
 
-Available tools:
-
-- browser_navigate - Start browser and go to URL
-- browser_snapshot - Get accessibility tree with element refs (use BEFORE interactions)
-- browser_click - Click elements (using ref from snapshot)
-- browser_fill_form - Fill form inputs (using ref from snapshot)
-- browser_type - Type text with keyboard
-- browser_hover - Hover over elements
-- browser_wait_for - Wait for elements/conditions (no manual sleeps needed!)
-- browser_verify_element_visible - Assert element is visible
-- browser_verify_text_visible - Assert text appears on page
-- browser_console_messages - Check for JavaScript errors
-- browser_evaluate - Execute JavaScript (use sparingly, only for debugging)
+Browser automation is DISABLED. Use curl to test all endpoints:
 
 **Testing workflow:**
 
-1. browser_navigate → go to URL
-2. browser_snapshot → get element refs (REQUIRED before interactions)
-3. browser_click/browser_fill_form → interact using refs from snapshot
-4. browser_wait_for → wait for UI updates if needed
-5. browser*verify*\* → assert results
+1. Login to get auth token:
+   ```bash
+   # Replace <backend_port> with your actual backend port (check the generated project's README/init output)
+   curl -X POST http://localhost:<backend_port>/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"admin@smw.com","password":"admin123"}'
+   ```
 
-Focus on functional correctness. UI polish can be addressed later.
+2. Use token for authenticated requests:
+   ```bash
+   curl -H "Authorization: Bearer <token>" \
+     http://localhost:<backend_port>/api/endpoint
+   ```
+
+3. Test CRUD operations:
+   - CREATE: POST with data payload
+   - READ: GET to verify data exists
+   - UPDATE: PUT/PATCH with changes
+   - DELETE: DELETE and verify removal
+
+4. Verify database persistence:
+   - Create record → GET to verify
+   - Update record → GET to verify changes
+   - Delete record → GET to verify removal
+
+5. Test error cases:
+   - Invalid input → verify error response
+   - Missing auth → verify 401/403
+   - Not found → verify 404
+
+**Focus on functional correctness through API testing.**
 
 ---
 
