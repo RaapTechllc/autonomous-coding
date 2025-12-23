@@ -20,12 +20,14 @@ ALLOWED_COMMANDS = {
     "tail",
     "wc",
     "grep",
+    "sed",  # Stream editor for text manipulation
     # File operations (agent uses SDK tools for most file ops, but cp/mkdir needed occasionally)
     "cp",
     "mkdir",
     "chmod",  # For making scripts executable; validated separately
-    # Directory
+    # Directory navigation
     "pwd",
+    "cd",  # Required for compound commands like "cd path && command"
     # Node.js development
     "npm",
     "npx",
@@ -41,6 +43,7 @@ ALLOWED_COMMANDS = {
     "sleep",
     "kill",  # Kill by PID
     "pkill",  # For killing dev servers; validated separately
+    "taskkill",  # Windows process killer
     # Network/API testing
     "curl",
     # File operations
@@ -52,6 +55,8 @@ ALLOWED_COMMANDS = {
     "bash",
     # Script execution
     "init.sh",  # Init scripts; validated separately
+    # Output/debugging
+    "echo",  # Used for fallback messages and debugging
 }
 
 # Commands that need additional validation even when in the allowlist
@@ -155,12 +160,22 @@ def extract_commands(command_string: str) -> list[str]:
             ):
                 continue
 
+            # Skip comments (tokens starting with #)
+            if token.startswith("#"):
+                break  # Rest of line is a comment
+
             # Skip flags/options
             if token.startswith("-"):
                 continue
 
             # Skip variable assignments (VAR=value)
             if "=" in token and not token.startswith("="):
+                continue
+
+            # Skip HTTP methods only when NOT expecting a command
+            # (i.e., when they appear as arguments to curl -X, not as command names)
+            # If expect_command is True, these could be legitimate command names
+            if not expect_command and token.upper() in ("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"):
                 continue
 
             if expect_command:
