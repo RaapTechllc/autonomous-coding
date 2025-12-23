@@ -93,8 +93,8 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
                 # Bash permission granted here, but actual commands are validated
                 # by the bash_security_hook (see security.py for allowed commands)
                 "Bash(*)",
-                # Allow Playwright MCP tools for browser automation
-                *PLAYWRIGHT_TOOLS,
+                # Playwright disabled - browser automation not needed
+                # *PLAYWRIGHT_TOOLS,
             ],
         },
     }
@@ -111,7 +111,7 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
     print("   - Sandbox enabled (OS-level bash isolation)")
     print(f"   - Filesystem restricted to: {project_dir.resolve()}")
     print("   - Bash commands restricted to allowlist (see security.py)")
-    print("   - MCP servers: playwright (browser automation)")
+    print("   - MCP servers: none (Playwright disabled)")
     print()
 
     return ClaudeSDKClient(
@@ -120,11 +120,12 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
             system_prompt="You are an expert full-stack developer building a production-quality web application.",
             allowed_tools=[
                 *BUILTIN_TOOLS,
-                *PLAYWRIGHT_TOOLS,
+                # Playwright disabled - browser automation not needed
+                # *PLAYWRIGHT_TOOLS,
             ],
             mcp_servers={
-                "playwright": {"command": "npx", "args": ["@playwright/mcp@latest", "--headless"]}
-                # "playwright": {"command": "npx", "args": ["@playwright/mcp@latest", "--viewport-size", "1280x720"]}
+                # Playwright disabled - browser automation not needed
+                # "playwright": {"command": "npx", "args": ["@playwright/mcp@latest", "--headless"]}
             },
             hooks={
                 "PreToolUse": [

@@ -17,7 +17,7 @@ from prompts import get_initializer_prompt, get_coding_prompt, copy_spec_to_proj
 
 
 # Configuration
-AUTO_CONTINUE_DELAY_SECONDS = 3
+AUTO_CONTINUE_DELAY_SECONDS = 1  # Reduced from 3 for faster iteration
 
 
 async def run_agent_session(
@@ -46,51 +46,66 @@ async def run_agent_session(
 
         # Collect response text and show tool use
         response_text = ""
-        async for msg in client.receive_response():
-            msg_type = type(msg).__name__
+        try:
+            async for msg in client.receive_response():
+                try:
+                    msg_type = type(msg).__name__
 
-            # Handle AssistantMessage (text and tool use)
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
+                    # Handle AssistantMessage (text and tool use)
+                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                        for block in msg.content:
+                            block_type = type(block).__name__
 
-                    if block_type == "TextBlock" and hasattr(block, "text"):
-                        response_text += block.text
-                        print(block.text, end="", flush=True)
-                    elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                        print(f"\n[Tool: {block.name}]", flush=True)
-                        if hasattr(block, "input"):
-                            input_str = str(block.input)
-                            if len(input_str) > 200:
-                                print(f"   Input: {input_str[:200]}...", flush=True)
-                            else:
-                                print(f"   Input: {input_str}", flush=True)
+                            if block_type == "TextBlock" and hasattr(block, "text"):
+                                response_text += block.text
+                                print(block.text, end="", flush=True)
+                            elif block_type == "ToolUseBlock" and hasattr(block, "name"):
+                                print(f"\n[Tool: {block.name}]", flush=True)
+                                if hasattr(block, "input"):
+                                    input_str = str(block.input)
+                                    if len(input_str) > 200:
+                                        print(f"   Input: {input_str[:200]}...", flush=True)
+                                    else:
+                                        print(f"   Input: {input_str}", flush=True)
 
-            # Handle UserMessage (tool results)
-            elif msg_type == "UserMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
+                    # Handle UserMessage (tool results)
+                    elif msg_type == "UserMessage" and hasattr(msg, "content"):
+                        for block in msg.content:
+                            block_type = type(block).__name__
 
-                    if block_type == "ToolResultBlock":
-                        result_content = getattr(block, "content", "")
-                        is_error = getattr(block, "is_error", False)
+                            if block_type == "ToolResultBlock":
+                                result_content = getattr(block, "content", "")
+                                is_error = getattr(block, "is_error", False)
 
-                        # Check if command was blocked by security hook
-                        if "blocked" in str(result_content).lower():
-                            print(f"   [BLOCKED] {result_content}", flush=True)
-                        elif is_error:
-                            # Show errors (truncated)
-                            error_str = str(result_content)[:500]
-                            print(f"   [Error] {error_str}", flush=True)
-                        else:
-                            # Tool succeeded - just show brief confirmation
-                            print("   [Done]", flush=True)
+                                # Check if command was blocked by security hook
+                                if "blocked" in str(result_content).lower():
+                                    print(f"   [BLOCKED] {result_content}", flush=True)
+                                elif is_error:
+                                    # Show errors (truncated)
+                                    error_str = str(result_content)[:500]
+                                    print(f"   [Error] {error_str}", flush=True)
+                                else:
+                                    # Tool succeeded - just show brief confirmation
+                                    print("   [Done]", flush=True)
+                except Exception as msg_err:
+                    # Handle errors processing individual messages
+                    print(f"\n   [Warning] Error processing message: {msg_err}", flush=True)
+                    continue
+        except Exception as stream_err:
+            # Handle stream closure or other streaming errors
+            error_msg = str(stream_err).lower()
+            if "stream closed" in error_msg or "closed" in error_msg:
+                print(f"\n\n[Stream closed - session will restart]", flush=True)
+            else:
+                print(f"\n\n[Streaming error: {stream_err}]", flush=True)
+            # Return error status to trigger retry
+            return "error", str(stream_err)
 
         print("\n" + "-" * 70 + "\n")
         return "continue", response_text
 
     except Exception as e:
-        print(f"Error during agent session: {e}")
+        print(f"\nError during agent session: {e}")
         return "error", str(e)
 
 
